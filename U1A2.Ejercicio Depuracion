@@ -1,0 +1,63 @@
+import machine
+import utime
+import micropython
+import gc
+import random
+
+led_pin = machine.PWM(machine.Pin(25))  # Configurar pin como PWM
+led_pin.freq(1000)  # Frecuencia de PWM
+
+datos = []  # Lista para almacenar datos
+
+class MemoryCriticalError(Exception):
+    """Excepción para indicar que la memoria ha alcanzado un nivel crítico."""
+    pass
+
+def monitorear_memoria():
+    """Función para monitorear el uso de memoria y calcular porcentaje de uso"""
+    micropython.mem_info()
+    
+    memoria_libre = gc.mem_free()
+    memoria_total = gc.mem_alloc() + memoria_libre
+    porcentaje_usado = (memoria_total - memoria_libre) / memoria_total * 100
+    return porcentaje_usado
+
+while True:
+    try:
+        # Generar y almacenar datos
+        for _ in range(50):  
+            datos.append(random.randint(10000, 100000))  # Usar enteros en lugar de strings
+
+        uso_memoria = monitorear_memoria()
+        print(f"Uso de memoria: {uso_memoria:.2f}% | Elementos en lista: {len(datos)}")
+
+        # Control del LED basado en uso de memoria
+        if uso_memoria < 50:
+            led_pin.duty_u16(0)  # LED apagado
+            utime.sleep(1)  
+
+        elif 50 <= uso_memoria < 90:
+            print("Memoria >50% - Parpadeo lento")
+            led_pin.duty_u16(32768)  
+            utime.sleep(1)  
+            led_pin.duty_u16(0)  
+            utime.sleep(1)
+
+        else:  # Memoria >= 90%
+            print("Memoria >90% - Parpadeo rápido")
+            led_pin.duty_u16(65535)  
+            utime.sleep_ms(200)  
+            led_pin.duty_u16(0)  
+            utime.sleep_ms(200)
+
+        # Si la memoria supera el 95%, lanzar error y detener el programa
+        if uso_memoria > 95:
+            raise MemoryCriticalError("Memoria crítica superada. Deteniendo ejecución.")
+
+    except MemoryCriticalError as e:
+        print(f"ERROR CRÍTICO: {e}")
+        break  # Detiene la ejecución del programa
+
+    except Exception as e:
+        print(f"Error detectado: {e}")
+        utime.sleep(2)
